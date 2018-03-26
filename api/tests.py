@@ -3,13 +3,15 @@ from .models import BucketList
 from rest_framework.test import APIClient
 from rest_framework import status
 from django.urls import reverse
+from django.contrib.auth.models import User
 
 # Create your tests here.
 class BucketListTestCase(TestCase):
     """ This defines test suite for the bucket list model """
 
     def setUp(self):
-        self.bucketlist = BucketList(name="test")
+        user = User.objects.create(username="asta")
+        self.bucketlist = BucketList(name="test", owner=user)
 
     def test_can_create_bucketlist(self):
         old_count = BucketList.objects.count()
@@ -24,19 +26,28 @@ class ViewTestCase(TestCase):
     """ Test for api views """
 
     def setUp(self):
+        user = User.objects.create(username="richard")
         self.client = APIClient()
-        self.bucketlist_data = {'name': 'the king'}
+        self.client.force_authenticate(user=user)
+        self.bucketlist_data = {'name': 'the king', 'owner': user.id}
         self.response = self.client.post(
             reverse('create'),
             self.bucketlist_data,
             format="json"
         )
 
+    def test_authorization_is_enforced(self):
+        """Test that the api has user authorization."""
+        new_client = APIClient()
+        res = new_client.get('/bucketlists/', kwargs={'pk': 3}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+
     def test_api_can_create_bucketlist(self):
         self.assertEqual(self.response.status_code, status.HTTP_201_CREATED)
 
     def test_api_can_get_bucketlist(self):
-        bucket_list = BucketList.objects.get()
+        bucket_list = BucketList.objects.get(id=1)
         response = self.client.get(
             reverse('details', kwargs={'pk': bucket_list.id }),
             format="json"
